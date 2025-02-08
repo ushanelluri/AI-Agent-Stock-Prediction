@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
 import os
+import time
 import pandas as pd
 import streamlit as st
 from yahooquery import Ticker
 from dotenv import load_dotenv
+
+# For live data auto-refresh (Streamlit version 1.10+ includes st.experimental_rerun, but here we use st_autorefresh)
+# If you do not have st_autorefresh built-in, you can install streamlit-autorefresh:
+# pip install streamlit-autorefresh
+from streamlit_autorefresh import st_autorefresh
 
 # Load environment variables if needed (e.g., API keys)
 load_dotenv()
@@ -33,6 +39,25 @@ def fetch_stock_data(ticker_symbol, period='1y'):
                 return None
     return data
 
+def fetch_realtime_data(ticker_symbol):
+    """
+    Fetch current market data for a given ticker symbol using yahooquery.
+    Returns a DataFrame with the current market data.
+    """
+    st.info(f"Fetching real-time data for {ticker_symbol}...")
+    ticker = Ticker(ticker_symbol)
+    try:
+        realtime_data = ticker.price
+        if realtime_data:
+            # Convert the price dictionary to a DataFrame.
+            df_rt = pd.DataFrame([realtime_data])
+            return df_rt
+        else:
+            st.error("Failed to fetch real-time data.")
+            return None
+    except Exception as e:
+        st.error(f"Error fetching real-time data: {e}")
+        return None
 
 class IchimokuCalculator:
     """
@@ -121,7 +146,7 @@ def main():
     if st.button("Calculate Ichimoku Cloud"):
         data = fetch_stock_data(ticker_symbol, period=period_option)
         if data is not None:
-            st.subheader(f"Original Stock Data for {ticker_symbol}")
+            st.subheader(f"Original Historical Data for {ticker_symbol}")
             st.dataframe(data.tail(10))
             
             ichimoku_calc = IchimokuCalculator(
@@ -138,11 +163,27 @@ def main():
             st.info("Note: The Chikou Span will show NaN for the most recent rows, which is expected with the conventional calculation.")
 
     # Button to fetch and display the latest historical data.
-    if st.button("Fetch Latest Data"):
+    if st.button("Fetch Latest Historical Data"):
         latest_data = fetch_stock_data(ticker_symbol, period=period_option)
         if latest_data is not None:
             st.subheader(f"Latest Historical Data for {ticker_symbol}")
             st.dataframe(latest_data.tail(10))
+
+    # Button to fetch and display real-time market data (one-time fetch).
+    if st.button("Fetch Real-Time Data"):
+        realtime_data = fetch_realtime_data(ticker_symbol)
+        if realtime_data is not None:
+            st.subheader(f"Real-Time Data for {ticker_symbol}")
+            st.dataframe(realtime_data)
+    
+    # Button to start a live data feed that updates every 10 seconds.
+    if st.button("Start Live Data Feed"):
+        # The following autorefresh will cause the entire app to refresh every 10 seconds.
+        st_autorefresh(interval=10000, limit=None, key="live_data_autorefresh")
+        live_data = fetch_realtime_data(ticker_symbol)
+        if live_data is not None:
+            st.subheader(f"Live Data Feed for {ticker_symbol}")
+            st.dataframe(live_data)
 
 if __name__ == '__main__':
     main()
