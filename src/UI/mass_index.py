@@ -54,7 +54,7 @@ def standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     # Split each column name by whitespace
     split_cols = [col.split() for col in cols]
     
-    # If all columns have at least two tokens
+    # If all columns have at least two tokens, check for a common trailing token
     if all(len(tokens) >= 2 for tokens in split_cols):
         # Extract the last token from each column name
         last_tokens = [tokens[-1] for tokens in split_cols]
@@ -115,21 +115,52 @@ def calculate_mass_index(data: pd.DataFrame, ema_period: int = 9, sum_period: in
     return mass_index
 
 # -------------------------------------------
-# Streamlit UI Code
+# Streamlit UI Code with Additional Customization Features
 # -------------------------------------------
 def main():
     st.title("Stock Data and Mass Index Calculator")
     
-    # Sidebar for configuration
+    # Sidebar for general configuration
     st.sidebar.header("Configuration")
     ticker = st.sidebar.text_input("Ticker Symbol", value="AAPL")
     period_str = st.sidebar.selectbox("Data Period", options=["1mo", "3mo", "6mo", "1y", "2y", "5y", "10y"], index=3)
     interval = st.sidebar.selectbox("Data Interval", options=["1d", "1wk", "1mo"], index=0)
     
-    # Mass Index parameters
+    # Sidebar for Mass Index parameters
     st.sidebar.subheader("Mass Index Parameters")
     ema_period = st.sidebar.number_input("EMA Period", min_value=5, max_value=20, value=9, step=1)
     sum_period = st.sidebar.number_input("Sum Period", min_value=10, max_value=50, value=25, step=1)
+    
+    # Sidebar for Chart Customization
+    st.sidebar.subheader("Chart Customization")
+    line_color = st.sidebar.color_picker("Mass Index Line Color", value="#0000FF")
+    line_style_choice = st.sidebar.selectbox("Mass Index Line Style", options=["solid", "dashed", "dotted", "dashdot"], index=0)
+    # Map the chosen style to matplotlib line styles
+    line_style_map = {
+        "solid": "-",
+        "dashed": "--",
+        "dotted": ":",
+        "dashdot": "-."
+    }
+    line_style = line_style_map[line_style_choice]
+    
+    chart_width = st.sidebar.slider("Chart Width (inches)", min_value=5, max_value=20, value=10)
+    chart_height = st.sidebar.slider("Chart Height (inches)", min_value=3, max_value=15, value=4)
+    show_grid = st.sidebar.checkbox("Show Grid", value=True)
+    
+    # Sidebar for Thresholds and Additional Options
+    st.sidebar.subheader("Thresholds and Additional Options")
+    show_thresholds = st.sidebar.checkbox("Show Threshold Lines", value=False)
+    if show_thresholds:
+        upper_threshold = st.sidebar.number_input("Upper Threshold", value=27.0)
+        lower_threshold = st.sidebar.number_input("Lower Threshold", value=26.5)
+    else:
+        upper_threshold = None
+        lower_threshold = None
+    
+    show_price_chart = st.sidebar.checkbox("Show Closing Price Chart", value=False)
+    show_raw_table = st.sidebar.checkbox("Show Raw Stock Data Table", value=True)
+    show_data_with_mi_table = st.sidebar.checkbox("Show Data with Mass Index Table", value=True)
     
     # Button to fetch data
     if st.sidebar.button("Fetch Data"):
@@ -137,7 +168,8 @@ def main():
         stock_data = fetch_stock_data(ticker, period=period_str, interval=interval)
         if not stock_data.empty:
             st.subheader("Fetched Stock Data")
-            st.dataframe(stock_data.tail(10))  # Display last 10 rows
+            if show_raw_table:
+                st.dataframe(stock_data.tail(10))  # Display last 10 rows
             st.session_state['stock_data'] = stock_data
         else:
             st.error("Failed to fetch data. Please check the ticker symbol and parameters.")
@@ -155,17 +187,50 @@ def main():
             stock_data_with_mi = stock_data.copy()
             stock_data_with_mi['Mass Index'] = mass_index_series
             
+            # Plot the Mass Index Chart
             st.subheader("Mass Index Chart")
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(stock_data_with_mi.index, stock_data_with_mi['Mass Index'], label='Mass Index', color='blue')
+            fig, ax = plt.subplots(figsize=(chart_width, chart_height))
+            ax.plot(stock_data_with_mi.index, stock_data_with_mi['Mass Index'],
+                    label='Mass Index', color=line_color, linestyle=line_style)
             ax.set_title(f"{ticker} Mass Index (EMA Period: {ema_period}, Sum Period: {sum_period})")
             ax.set_xlabel("Date")
             ax.set_ylabel("Mass Index")
+            if show_grid:
+                ax.grid(True)
+            if show_thresholds and upper_threshold is not None and lower_threshold is not None:
+                ax.axhline(upper_threshold, color='red', linestyle='--', label=f'Upper Threshold ({upper_threshold})')
+                ax.axhline(lower_threshold, color='green', linestyle='--', label=f'Lower Threshold ({lower_threshold})')
             ax.legend()
             st.pyplot(fig)
             
-            st.subheader("Data with Mass Index")
-            st.dataframe(stock_data_with_mi.tail(10))
+            # Optionally plot the Closing Price Chart
+            if show_price_chart:
+                st.subheader("Closing Price Chart")
+                fig2, ax2 = plt.subplots(figsize=(chart_width, chart_height))
+                # Use the 'close' column from the fetched data
+                if 'close' in stock_data.columns:
+                    ax2.plot(stock_data.index, stock_data['close'], label='Close Price', color='orange')
+                    ax2.set_title(f"{ticker} Closing Price")
+                    ax2.set_xlabel("Date")
+                    ax2.set_ylabel("Price")
+                    if show_grid:
+                        ax2.grid(True)
+                    ax2.legend()
+                    st.pyplot(fig2)
+                else:
+                    st.error("Closing price data not available.")
+            
+            # Show Data Tables if selected
+            if show_data_with_mi_table:
+                st.subheader("Data with Mass Index")
+                st.dataframe(stock_data_with_mi.tail(10))
+            
+            # Provide a download button for the computed data as CSV
+            csv_data = stock_data_with_mi.to_csv().encode('utf-8')
+            st.download_button(label="Download Data as CSV",
+                               data=csv_data,
+                               file_name=f"{ticker}_mass_index.csv",
+                               mime='text/csv')
 
 if __name__ == "__main__":
     main()
