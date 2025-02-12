@@ -82,7 +82,6 @@ def calculate_cci(data: pd.DataFrame, period: int = 20) -> pd.Series:
     # Convert column names to lowercase for consistency
     data.columns = data.columns.str.lower().str.strip()
     
-   
     # Check if required columns exist
     if not {"high", "low", "close"}.issubset(data.columns):
         st.error("Data must contain 'High', 'Low', and 'Close' columns.")
@@ -115,6 +114,21 @@ def main():
     interval = st.sidebar.selectbox("Data Interval", options=["1d", "1wk", "1mo"], index=0)
     cci_period = st.sidebar.number_input("CCI Calculation Period", min_value=5, max_value=50, value=20, step=1)
     
+    # Additional Customization Options for Chart Display
+    st.sidebar.header("Chart Customization")
+    overbought_threshold = st.sidebar.number_input("Overbought Threshold", value=100, step=1)
+    oversold_threshold = st.sidebar.number_input("Oversold Threshold", value=-100, step=1)
+    show_threshold_lines = st.sidebar.checkbox("Show Threshold Lines", value=True)
+    cci_line_color = st.sidebar.text_input("CCI Line Color", value="purple")
+    overbought_line_color = st.sidebar.text_input("Overbought Line Color", value="red")
+    oversold_line_color = st.sidebar.text_input("Oversold Line Color", value="green")
+    show_grid = st.sidebar.checkbox("Show Grid", value=True)
+    line_width = st.sidebar.slider("CCI Line Width", min_value=1, max_value=5, value=2)
+    chart_width = st.sidebar.number_input("Chart Width", value=10)
+    chart_height = st.sidebar.number_input("Chart Height", value=4)
+    custom_title = st.sidebar.text_input("Chart Title", value="CCI Chart")
+    show_data_table = st.sidebar.checkbox("Show Data Table", value=True)
+    
     # Button to fetch data
     if st.sidebar.button("Fetch Data"):
         st.info(f"Fetching data for {ticker}...")
@@ -140,18 +154,22 @@ def main():
             stock_data_with_cci['CCI'] = cci_series
             
             st.subheader("CCI Chart")
-            fig, ax = plt.subplots(figsize=(10, 4))
-            ax.plot(stock_data_with_cci.index, stock_data_with_cci['CCI'], label='CCI', color='purple')
-            ax.axhline(100, color='red', linestyle='--', label='Overbought (+100)')
-            ax.axhline(-100, color='green', linestyle='--', label='Oversold (-100)')
-            ax.set_title(f"{ticker} CCI (Period: {cci_period})")
+            fig, ax = plt.subplots(figsize=(chart_width, chart_height))
+            ax.plot(stock_data_with_cci.index, stock_data_with_cci['CCI'], label='CCI', color=cci_line_color, linewidth=line_width)
+            if show_threshold_lines:
+                ax.axhline(overbought_threshold, color=overbought_line_color, linestyle='--', label=f'Overbought ({overbought_threshold})')
+                ax.axhline(oversold_threshold, color=oversold_line_color, linestyle='--', label=f'Oversold ({oversold_threshold})')
+            ax.set_title(custom_title if custom_title else f"{ticker} CCI (Period: {cci_period})")
             ax.set_xlabel("Date")
             ax.set_ylabel("CCI")
+            if show_grid:
+                ax.grid(True)
             ax.legend()
             st.pyplot(fig)
             
-            st.subheader("Data with CCI")
-            st.dataframe(stock_data_with_cci.tail(10))
+            if show_data_table:
+                st.subheader("Data with CCI")
+                st.dataframe(stock_data_with_cci.tail(10))
 
 if __name__ == "__main__":
     main()
