@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 # Import the ADXIndicator class from the Indicators package
 from Indicators.adx_indicator import ADXIndicator
 
-st.title("Prototype Trading System - ADX Calculation")
+st.title("ADX Calculation")
 
 # Input fields for stock symbol and date range
 symbol = st.text_input("Enter Stock Symbol:", value="AAPL")
@@ -33,12 +33,17 @@ if st.button("Fetch Data"):
 
 # Only allow ADX calculation if the stock data is available
 if st.session_state.stock_data is not None:
+    st.subheader("Customize ADX Parameters")
+    
     # Input field for setting the ADX period
     period = st.number_input("Enter ADX period:", min_value=1, max_value=100, value=14, key="adx_period")
 
-    # Button to calculate ADX values
+    # Dropdown to select the smoothing method
+    smoothing_method = st.selectbox("Select Smoothing Method:", ["SMA", "EMA"])
+
+    # Button to calculate ADX values based on the custom parameters
     if st.button("Calculate ADX"):
-        adx_indicator = ADXIndicator(period=period)
+        adx_indicator = ADXIndicator(period=period, smoothing_method=smoothing_method)
         df_with_adx = adx_indicator.calculate(st.session_state.stock_data)
-        st.write(f"Stock Data with ADX{period} for {symbol}:")
+        st.write(f"Stock Data with ADX (Period: {period}, Smoothing: {smoothing_method}) for {symbol}:")
         st.dataframe(df_with_adx.tail())
