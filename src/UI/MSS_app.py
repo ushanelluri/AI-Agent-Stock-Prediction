@@ -73,8 +73,7 @@ class DataCollectionAgent:
             f"Worried about {symbol}'s volatility today...",
             f"Market analysts predict a strong quarter for {symbol}.",
         ]
-        sentiment_scores = [TextBlob(post).sentiment.polarity for post in sample_posts]
-        return sentiment_scores
+        return sample_posts
 
     def get_financial_reports(self, symbol):
         """Retrieve stock's financial data using Yahoo Finance."""
@@ -93,8 +92,41 @@ class DataCollectionAgent:
         st.pyplot(plt)
 
 
-# Initialize the Data Collection Agent
+# === Sentiment Analysis Agent ===
+class SentimentAnalysisAgent:
+    """Agent to perform sentiment analysis on financial news and social media posts."""
+
+    def analyze_text_sentiment(self, text):
+        """Analyze sentiment of a given text using TextBlob."""
+        sentiment_score = TextBlob(text).sentiment.polarity
+        if sentiment_score > 0:
+            sentiment = "Positive"
+        elif sentiment_score < 0:
+            sentiment = "Negative"
+        else:
+            sentiment = "Neutral"
+        return sentiment_score, sentiment
+
+    def analyze_news_sentiment(self, articles):
+        """Analyze sentiment for financial news articles."""
+        results = []
+        for article in articles:
+            score, sentiment = self.analyze_text_sentiment(article["summary"])
+            results.append({"headline": article["headline"], "sentiment": sentiment, "score": score})
+        return results
+
+    def analyze_social_media_sentiment(self, posts):
+        """Analyze sentiment for social media posts."""
+        results = []
+        for post in posts:
+            score, sentiment = self.analyze_text_sentiment(post)
+            results.append({"post": post, "sentiment": sentiment, "score": score})
+        return results
+
+
+# Initialize the Agents
 data_agent = DataCollectionAgent()
+sentiment_agent = SentimentAnalysisAgent()
 
 # Button to fetch news articles
 if st.button("Fetch News Articles"):
@@ -104,11 +136,22 @@ if st.button("Fetch News Articles"):
         st.write(article['summary'])
         st.write("---")
 
+# Button to analyze news sentiment
+if st.button("Analyze News Sentiment"):
+    articles = data_agent.fetch_news_articles(symbol)
+    sentiment_results = sentiment_agent.analyze_news_sentiment(articles)
+    for result in sentiment_results:
+        st.write(f"**{result['headline']}** - Sentiment: {result['sentiment']} (Score: {result['score']:.2f})")
+        st.write("---")
+
 # Button to analyze social media sentiment
 if st.button("Analyze Social Media Sentiment"):
-    sentiment_scores = data_agent.collect_social_media_data(symbol)
-    st.write("Sentiment Scores:", sentiment_scores)
-    st.bar_chart(sentiment_scores)
+    posts = data_agent.collect_social_media_data(symbol)
+    sentiment_results = sentiment_agent.analyze_social_media_sentiment(posts)
+    sentiment_df = pd.DataFrame(sentiment_results)
+    st.write("Social Media Sentiment Analysis:")
+    st.dataframe(sentiment_df)
+    st.bar_chart(sentiment_df.set_index("post")["score"])
 
 # Button to fetch financial reports
 if st.button("Fetch Financial Reports"):
