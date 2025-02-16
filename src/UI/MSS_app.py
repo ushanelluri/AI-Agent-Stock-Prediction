@@ -124,7 +124,6 @@ class SentimentAnalysisAgent:
         return results
 
 
-# Initialize the Agents
 data_agent = DataCollectionAgent()
 sentiment_agent = SentimentAnalysisAgent()
 
