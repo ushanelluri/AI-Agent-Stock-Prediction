@@ -7,8 +7,15 @@ import requests
 import json
 import matplotlib.pyplot as plt
 import seaborn as sns
-from textblob import TextBlob
 import pandas_ta as ta
+from textblob import TextBlob
+from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from sklearn.naive_bayes import MultinomialNB
+import tensorflow as tf
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, LSTM, Dense
 
 # Ensure correct path imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
@@ -34,8 +41,8 @@ st.dataframe(data.tail())
 # Add a button to calculate and display SMA using SMAIndicator class
 if st.button("Calculate SMA"):
     period = st.number_input("Enter SMA period:", min_value=1, max_value=100, value=14)
-    sma_indicator = SMAIndicator(period=period)  # Instantiate the SMAIndicator class
-    data_with_sma = sma_indicator.calculate(data)  # Calculate the SMA
+    sma_indicator = SMAIndicator(period=period)
+    data_with_sma = sma_indicator.calculate(data)
     st.write(f"Stock Data with SMA{period} for {symbol}:")
     st.dataframe(data_with_sma.tail())
 
@@ -45,13 +52,6 @@ if st.button("Calculate RSI"):
     data[f"RSI{period}"] = ta.rsi(data['Close'], length=period)
     st.write(f"Stock Data with RSI{period} for {symbol}:")
     st.dataframe(data.tail())
-
-# Add a button to fetch the latest data for the selected symbol
-if st.button("Fetch Latest Data"):
-    latest_data = data_fetcher.get_stock_data(symbol)
-    st.write(f"Latest Stock Data for {symbol}:")
-    st.dataframe(latest_data.tail())
-
 
 # === Data Collection Agent ===
 class DataCollectionAgent:
@@ -82,7 +82,7 @@ class DataCollectionAgent:
 
     def preprocess_data(self, data):
         """Perform basic data cleaning."""
-        data = data.dropna()  # Remove missing values
+        data = data.dropna()
         return data
 
     def exploratory_data_analysis(self, data):
@@ -91,13 +91,12 @@ class DataCollectionAgent:
         sns.histplot(data['Close'], bins=30, kde=True)
         st.pyplot(plt)
 
-
 # === Sentiment Analysis Agent ===
 class SentimentAnalysisAgent:
     """Agent to perform sentiment analysis on financial news and social media posts."""
 
     def analyze_text_sentiment(self, text):
-        """Analyze sentiment of a given text using TextBlob."""
+        """Lexicon-based Sentiment Analysis using TextBlob (Subtask 1)."""
         sentiment_score = TextBlob(text).sentiment.polarity
         if sentiment_score > 0:
             sentiment = "Positive"
@@ -106,6 +105,32 @@ class SentimentAnalysisAgent:
         else:
             sentiment = "Neutral"
         return sentiment_score, sentiment
+
+    def train_ml_model(self, data, labels):
+        """Machine Learning Model (Subtask 2) - Naïve Bayes."""
+        vectorizer = CountVectorizer()
+        tfidf_transformer = TfidfTransformer()
+        X_counts = vectorizer.fit_transform(data)
+        X_tfidf = tfidf_transformer.fit_transform(X_counts)
+        clf = MultinomialNB().fit(X_tfidf, labels)
+        return clf, vectorizer, tfidf_transformer
+
+    def train_dl_model(self, data, labels, max_words=5000, max_len=100):
+        """Deep Learning Model (Subtask 3) - LSTM."""
+        tokenizer = Tokenizer(num_words=max_words)
+        tokenizer.fit_on_texts(data)
+        sequences = tokenizer.texts_to_sequences(data)
+        X = pad_sequences(sequences, maxlen=max_len)
+        
+        model = Sequential([
+            Embedding(max_words, 128, input_length=max_len),
+            LSTM(64, return_sequences=True),
+            LSTM(32),
+            Dense(1, activation='sigmoid')
+        ])
+        model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+        model.fit(X, labels, epochs=5, batch_size=32, verbose=1)
+        return model, tokenizer
 
     def analyze_news_sentiment(self, articles):
         """Analyze sentiment for financial news articles."""
@@ -122,7 +147,6 @@ class SentimentAnalysisAgent:
             score, sentiment = self.analyze_text_sentiment(post)
             results.append({"post": post, "sentiment": sentiment, "score": score})
         return results
-
 
 data_agent = DataCollectionAgent()
 sentiment_agent = SentimentAnalysisAgent()
@@ -152,13 +176,16 @@ if st.button("Analyze Social Media Sentiment"):
     st.dataframe(sentiment_df)
     st.bar_chart(sentiment_df.set_index("post")["score"])
 
-# Button to fetch financial reports
-if st.button("Fetch Financial Reports"):
-    reports = data_agent.get_financial_reports(symbol)
-    st.write("Financial Reports:")
-    st.dataframe(reports)
+# Button to train ML model
+if st.button("Train ML Model"):
+    data_samples = ["The market is up!", "Stocks are falling", "Stable outlook"]
+    labels = [1, 0, 1]  # 1 = Positive, 0 = Negative
+    ml_model, vectorizer, tfidf = sentiment_agent.train_ml_model(data_samples, labels)
+    st.write("Machine Learning Model Trained Successfully!")
 
-# Button to perform EDA
-if st.button("Perform Exploratory Data Analysis"):
-    cleaned_data = data_agent.preprocess_data(data)
-    data_agent.exploratory_data_analysis(cleaned_data)
+# Button to train DL model
+if st.button("Train DL Model"):
+    data_samples = ["The stock is bullish", "Bearish trend continues", "Investors are optimistic"]
+    labels = [1, 0, 1]
+    dl_model, tokenizer = sentiment_agent.train_dl_model(data_samples, labels)
+    st.write("Deep Learning Model Trained Successfully!")
